@@ -1,0 +1,55 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install root deps (if any)
+        run: |
+          if [ -f package.json ]; then npm ci; else echo "no root package.json"; fi
+
+      - name: Install and build frontend
+        run: |
+          if [ -f frontend/package.json ]; then \
+            cd frontend && npm ci && if npm run | grep -q build; then npm run build; else echo "no frontend build"; fi; \
+          else echo "no frontend"; fi
+
+      - name: Install and test backend
+        run: |
+          if [ -f backend/package.json ]; then \
+            cd backend && npm ci && if npm run | grep -q test; then npm test; else echo "no backend tests"; fi; \
+          else echo "no backend"; fi
+
+      - name: Lint frontend (if present)
+        run: |
+          if [ -f frontend/package.json ]; then \
+            cd frontend && if npm run | grep -q lint; then npm run lint; else echo "no frontend lint script"; fi; \
+          else echo "no frontend"; fi
+
+      - name: Lint backend (if present)
+        run: |
+          if [ -f backend/package.json ]; then \
+            cd backend && if npm run | grep -q lint; then npm run lint; else echo "no backend lint script"; fi; \
+          else echo "no backend"; fi
+
+      - name: Upload artifacts (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            ./frontend/build || true
+            ./backend/test-results || true
